@@ -175,29 +175,43 @@ interface ChatPaneProps {
 // Self-contained memo pane. Notes are persisted in localStorage per entry.
 // Use key={entry.id} from the parent so state resets when entry changes.
 function MemoPane({ entry }: { entry: Entry }) {
-  const storageKey = `memo-notes-${entry.id}`;
   const [notes, setNotes] = useState<MemoNote[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) setNotes(JSON.parse(saved));
-    } catch {
-      // ignore parse errors
-    }
-  }, [storageKey]);
+    setLoading(true);
+    fetch(`/api/notes?entryId=${entry.id}`)
+      .then((r) => r.json())
+      .then((data) => { setNotes(Array.isArray(data) ? data : []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [entry.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [notes]);
 
+  const saveNotes = async (updated: MemoNote[]) => {
+    setSaving(true);
+    try {
+      await fetch(`/api/notes?entryId=${entry.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+    } catch { /* ignore */ } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text || saving) return;
     const note: MemoNote = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       text,
@@ -208,7 +222,7 @@ function MemoPane({ entry }: { entry: Entry }) {
     };
     const updated = [...notes, note];
     setNotes(updated);
-    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+    saveNotes(updated);
     setInput("");
     textareaRef.current?.focus();
   };
@@ -223,14 +237,18 @@ function MemoPane({ entry }: { entry: Entry }) {
   const handleDelete = (id: string) => {
     const updated = notes.filter((n) => n.id !== id);
     setNotes(updated);
-    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+    saveNotes(updated);
   };
 
   return (
     <>
       {/* Notes list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-        {notes.length === 0 && (
+        {loading ? (
+          <div className="flex items-center justify-center h-full py-8">
+            <span className="text-xs text-gray-400">読み込み中…</span>
+          </div>
+        ) : notes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 py-8 text-center">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-300">
               <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
@@ -240,8 +258,7 @@ function MemoPane({ entry }: { entry: Entry }) {
               <span className="text-gray-300">Enter で送信、Shift+Enter で改行</span>
             </p>
           </div>
-        )}
-        {notes.map((note) => (
+        ) : notes.map((note) => (
           <div key={note.id} className="group flex items-end justify-end gap-1">
             <button
               onClick={() => handleDelete(note.id)}
@@ -277,10 +294,14 @@ function MemoPane({ entry }: { entry: Entry }) {
           />
           <button
             type="submit"
-            disabled={!input.trim()}
+            disabled={!input.trim() || saving}
             className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 flex items-center justify-center text-white transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <IconSend />
+            {saving ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+            ) : <IconSend />}
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-1.5 text-right">Shift+Enter で改行</p>
