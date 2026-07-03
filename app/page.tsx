@@ -419,17 +419,19 @@ export default function ManabiSwitch() {
   }, []);
 
   const filteredEntries = useMemo(() => {
-    return entries.filter((entry) => {
-      const matchSource = selectedSource === "すべて" || entry.source === selectedSource;
-      const matchCategory = selectedCategory === "すべて" || entry.category === selectedCategory;
-      const q = searchQuery.toLowerCase();
-      const matchSearch =
-        q === "" ||
-        entry.title.toLowerCase().includes(q) ||
-        entry.body.toLowerCase().includes(q) ||
-        entry.tags.some((t) => t.toLowerCase().includes(q));
-      return matchSource && matchCategory && matchSearch;
-    });
+    return entries
+      .filter((entry) => {
+        const matchSource = selectedSource === "すべて" || entry.source === selectedSource;
+        const matchCategory = selectedCategory === "すべて" || entry.category === selectedCategory;
+        const q = searchQuery.toLowerCase();
+        const matchSearch =
+          q === "" ||
+          entry.title.toLowerCase().includes(q) ||
+          entry.body.toLowerCase().includes(q) ||
+          entry.tags.some((t) => t.toLowerCase().includes(q));
+        return matchSource && matchCategory && matchSearch;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
   }, [entries, selectedSource, selectedCategory, searchQuery]);
 
   const handleSelectEntry = (entry: Entry) => {
