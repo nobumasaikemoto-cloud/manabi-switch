@@ -1,4 +1,4 @@
-import { put, head, del } from "@vercel/blob";
+import { put, head } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 interface MemoNote {
@@ -20,10 +20,16 @@ export async function GET(req: NextRequest) {
     const blobMeta = await head(blobKey(entryId)).catch(() => null);
     if (!blobMeta) return NextResponse.json([]);
 
-    const res = await fetch(blobMeta.url);
+    // Cache-bust to always get the latest content
+    const res = await fetch(`${blobMeta.url}?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
     if (!res.ok) return NextResponse.json([]);
     const notes: MemoNote[] = await res.json();
-    return NextResponse.json(notes);
+    return NextResponse.json(notes, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch {
     return NextResponse.json([]);
   }
@@ -39,20 +45,8 @@ export async function POST(req: NextRequest) {
     access: "public",
     contentType: "application/json",
     addRandomSuffix: false,
+    cacheControlMaxAge: 0,
   });
 
   return NextResponse.json({ url: blob.url });
-}
-
-// DELETE /api/notes?entryId=xxx  → delete all notes for entry
-export async function DELETE(req: NextRequest) {
-  const entryId = req.nextUrl.searchParams.get("entryId");
-  if (!entryId) return NextResponse.json({ error: "entryId required" }, { status: 400 });
-
-  try {
-    const blobMeta = await head(blobKey(entryId)).catch(() => null);
-    if (blobMeta) await del(blobMeta.url);
-  } catch { /* ignore */ }
-
-  return NextResponse.json({ ok: true });
 }
